@@ -4,6 +4,9 @@
 #include <interfaces/interfaces.h>
 
 #include "events.h"
+#include "commands.h"
+#include "entity_utils.h"
+#include "grenade_shot_hook.h"
 #include "invert_hook.h"
 #include "rounds.h"
 #include "sound_hook.h"
@@ -75,7 +78,7 @@ static void Cmd_CustomRoundsMM(const CCommand& args)
 {
 	if (args.ArgC() < 2)
 	{
-		Msg("Usage: customrounds_mm <0|1|2|3>  (0=off, 1=onebullet, 2=nosound, 3=invert)\n");
+		Msg("Usage: customrounds_mm <0|1|2|3|4>  (0=off, 1=onebullet, 2=nosound, 3=invert, 4=grenadeshot)\n");
 		return;
 	}
 
@@ -86,8 +89,9 @@ static void Cmd_CustomRoundsMM(const CCommand& args)
 		case 1: Rounds_SetMode(CRRoundMode::OneBullet); break;
 		case 2: Rounds_SetMode(CRRoundMode::NoSound); break;
 		case 3: Rounds_SetMode(CRRoundMode::Invert); break;
+		case 4: Rounds_SetMode(CRRoundMode::GrenadeShot); break;
 		default:
-			Msg("Invalid mode %d (use 0, 1, 2 or 3)\n", mode);
+			Msg("Invalid mode %d (use 0..4)\n", mode);
 			return;
 	}
 
@@ -125,20 +129,26 @@ bool CustomRoundsPlugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t ma
 	}
 	AddGlobalByVtbl(m_EntitySystemSpawn, g_pEntSysVtbl);
 
-	ConVar_Register(FCVAR_RELEASE | FCVAR_GAMEDLL);
-	new ConCommand("customrounds_mm", Cmd_CustomRoundsMM, "customrounds_mm <0|1|2|3>", FCVAR_GAMEDLL);
+	Commands_Register();
+	new ConCommand("customrounds_mm", Cmd_CustomRoundsMM, "customrounds_mm <0|1|2|3|4>", FCVAR_GAMEDLL);
 
+	const bool bEntityUtils = EntityUtils_Init();
 	const bool bSoundHook = SoundHook_Install();
 	const bool bInvertHook = InvertHook_Install();
+	const bool bGrenadeShotHook = GrenadeShotHook_Install();
 
 	CR_Log("loaded %s v%s (%s)", GetName(), GetVersion(), GetDate());
-	CR_Log("modes: 0=off, 1=onebullet, 2=nosound, 3=invert | sound_hooks=%s invert_hooks=%s",
+	CR_Log("modes: 0=off 1=onebullet 2=nosound 3=invert 4=grenadeshot | entity=%s sound=%s invert=%s grenade_dmg=%s",
+		bEntityUtils ? "ok" : "FAILED",
 		bSoundHook ? "ok" : "FAILED",
-		bInvertHook ? "ok" : "FAILED");
-	META_CONPRINTF("[%s] Loaded %s v%s (%s) — customrounds_mm 0|1|2|3, sound=%s invert=%s\n",
+		bInvertHook ? "ok" : "FAILED",
+		bGrenadeShotHook ? "ok" : "FAILED");
+	META_CONPRINTF("[%s] Loaded %s v%s (%s) — customrounds_mm 0|1|2|3|4 entity=%s sound=%s invert=%s grenade=%s\n",
 		GetLogTag(), GetName(), GetVersion(), GetDate(),
+		bEntityUtils ? "ok" : "FAIL",
 		bSoundHook ? "ok" : "FAIL",
-		bInvertHook ? "ok" : "FAIL");
+		bInvertHook ? "ok" : "FAIL",
+		bGrenadeShotHook ? "ok" : "FAIL");
 
 	return true;
 }
@@ -146,8 +156,10 @@ bool CustomRoundsPlugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t ma
 bool CustomRoundsPlugin::Unload(char* error, size_t maxlen)
 {
 	Events_Unregister();
+	GrenadeShotHook_Uninstall();
 	SoundHook_Uninstall();
 	InvertHook_Uninstall();
+	EntityUtils_Shutdown();
 
 	CR_Log("unloaded");
 	META_CONPRINTF("[%s] Unloaded %s\n", GetLogTag(), GetName());

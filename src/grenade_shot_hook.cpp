@@ -1,4 +1,4 @@
-#include "invert_hook.h"
+#include "grenade_shot_hook.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -6,8 +6,8 @@
 
 #include <sys/mman.h>
 
+#include <entity2/entitysystem.h>
 #include <khook/memory.hpp>
-#include <tier0/dbg.h>
 
 #include "customrounds.h"
 #include "rounds.h"
@@ -21,58 +21,53 @@
 
 namespace
 {
-// CCSPlayer_MovementServices::SetupMove — cs2kz / cs2ac
-static const char* kSigSetupMoveLinux[] = {
-	"55 48 89 E5 41 57 41 56 41 55 49 89 F5 41 54 49 89 D4 53 48 89 FB 48 83 EC 48 E8 ? ? ? ? 48 8B 43 38",
-	nullptr
-};
+// CBaseEntity::TakeDamageOld — CS2Fixes gamedata
+static const char* kSigTakeDamageOldLinux =
+	"55 66 0F EF C0 48 89 E5 41 57 41 56 41 55 49 89 FD 31 FF";
 
-// Head of CMoveData (cs2ac Linux layout). Only fields we touch.
-struct CRVec3
+enum : int
 {
-	float x, y, z;
+	DMG_BULLET = 1 << 1, // 2
 };
 
-struct CRMoveData
+// Minimal CTakeDamageInfo layout (DumpSource2 / CS2Fixes).
+struct CRTakeDamageInfo
 {
-	uint32_t bitfieldStorage; // m_bHasZeroFrametime / m_bIsLateCommand
-	uint32_t playerHandle;
-	CRVec3 absViewAngles;
-	CRVec3 viewAngles;
-	CRVec3 lastMovementImpulses;
-	float forwardMove;
-	float sideMove;
-	float upMove;
+	uint8_t pad0[0x4C];
+	int32_t bitsDamageType; // 0x4C
 };
 
-static_assert(offsetof(CRMoveData, forwardMove) == 44, "CMoveData forwardMove offset");
-static_assert(offsetof(CRMoveData, sideMove) == 48, "CMoveData sideMove offset");
+static_assert(offsetof(CRTakeDamageInfo, bitsDamageType) == 0x4C, "CTakeDamageInfo bits offset");
 
-using SetupMoveFn = void (*)(void* services, void* command, CRMoveData* move);
+using TakeDamageOldFn = int64_t (*)(CEntityInstance* pThis, CRTakeDamageInfo* pInfo, void* pResult);
 
-static SetupMoveFn g_pTrampoline = nullptr;
+static TakeDamageOldFn g_pTrampoline = nullptr;
 static void* g_pTarget = nullptr;
-static constexpr size_t kStolen = 26; // full instructions through `sub rsp, 0x48`
+// Full instructions through `xor edi, edi` — enough for 14-byte abs jmp.
+static constexpr size_t kStolen = 19;
 static uint8_t g_origBytes[kStolen] = {};
 static bool g_hooked = false;
 
-static void InvertMoveData(CRMoveData* move)
+static bool IsPlayerPawnEntity(CEntityInstance* pEnt)
 {
-	if (!move)
-		return;
-
-	move->forwardMove = -move->forwardMove;
-	move->sideMove = -move->sideMove;
-	move->lastMovementImpulses.x = -move->lastMovementImpulses.x;
-	move->lastMovementImpulses.y = -move->lastMovementImpulses.y;
+	if (!pEnt)
+		return false;
+	const char* name = pEnt->GetClassname();
+	return name && !strcmp(name, "player");
 }
 
-static void Hook_SetupMove(void* services, void* command, CRMoveData* move)
+static int64_t Hook_TakeDamageOld(CEntityInstance* pThis, CRTakeDamageInfo* pInfo, void* pResult)
 {
-	g_pTrampoline(services, command, move);
+	if (Rounds_GetMode() == CRRoundMode::GrenadeShot
+		&& pThis && pInfo
+		&& IsPlayerPawnEntity(pThis)
+		&& (pInfo->bitsDamageType & DMG_BULLET))
+	{
+		// Valve returns 1 since 2025-10-15; supersede without applying bullet dmg.
+		return 1;
+	}
 
-	if (Rounds_GetMode() == CRRoundMode::Invert)
-		InvertMoveData(move);
+	return g_pTrampoline(pThis, pInfo, pResult);
 }
 
 static bool CreateTrampoline(void* pTarget)
@@ -95,7 +90,7 @@ static bool CreateTrampoline(void* pTarget)
 	const uint64_t cont = reinterpret_cast<uint64_t>(pTarget) + kStolen;
 	memcpy(code + kStolen + 6, &cont, sizeof(cont));
 
-	g_pTrampoline = reinterpret_cast<SetupMoveFn>(code);
+	g_pTrampoline = reinterpret_cast<TakeDamageOldFn>(code);
 	return true;
 }
 
@@ -110,7 +105,7 @@ static bool InstallJump(void* pTarget)
 	patch[3] = 0x00;
 	patch[4] = 0x00;
 	patch[5] = 0x00;
-	const uint64_t dest = reinterpret_cast<uint64_t>(&Hook_SetupMove);
+	const uint64_t dest = reinterpret_cast<uint64_t>(&Hook_TakeDamageOld);
 	memcpy(patch + 6, &dest, sizeof(dest));
 	for (size_t i = 14; i < kStolen; ++i)
 		patch[i] = 0x90;
@@ -122,24 +117,15 @@ static bool InstallJump(void* pTarget)
 
 } // namespace
 
-bool InvertHook_Install()
+bool GrenadeShotHook_Install()
 {
 	if (g_hooked)
 		return true;
 
-	void* pFunc = nullptr;
-	for (int i = 0; kSigSetupMoveLinux[i]; ++i)
-	{
-		pFunc = FindFunctionSignature(SERVER_LIB, ".text", kSigSetupMoveLinux[i]);
-		if (pFunc)
-		{
-			CR_Log("SetupMove matched sig #%d", i);
-			break;
-		}
-	}
+	void* pFunc = FindFunctionSignature(SERVER_LIB, ".text", kSigTakeDamageOldLinux);
 	if (!pFunc)
 	{
-		Warning("[CR] SetupMove signature not found — Invert round disabled\n");
+		Warning("[CR] TakeDamageOld signature not found — GrenadeShot bullet block disabled\n");
 		return false;
 	}
 
@@ -147,23 +133,22 @@ bool InvertHook_Install()
 
 	if (!CreateTrampoline(pFunc))
 	{
-		Warning("[CR] Invert trampoline alloc failed\n");
+		Warning("[CR] GrenadeShot trampoline alloc failed\n");
 		return false;
 	}
 
 	if (!InstallJump(pFunc))
 	{
-		Warning("[CR] Invert jump install failed\n");
+		Warning("[CR] GrenadeShot jump install failed\n");
 		return false;
 	}
 
 	g_hooked = true;
-	CR_Log("Invert SetupMove hooked @ %p (fwd@%zu side@%zu)",
-		pFunc, offsetof(CRMoveData, forwardMove), offsetof(CRMoveData, sideMove));
+	CR_Log("GrenadeShot TakeDamageOld hooked @ %p", pFunc);
 	return true;
 }
 
-void InvertHook_Uninstall()
+void GrenadeShotHook_Uninstall()
 {
 	if (!g_hooked || !g_pTarget)
 		return;
@@ -180,15 +165,10 @@ void InvertHook_Uninstall()
 
 	g_pTarget = nullptr;
 	g_hooked = false;
-	InvertHook_ResetPlayerState();
-	CR_Log("Invert SetupMove unhooked");
+	CR_Log("GrenadeShot TakeDamageOld unhooked");
 }
 
-void InvertHook_ResetPlayerState()
-{
-}
-
-bool InvertHook_IsInstalled()
+bool GrenadeShotHook_IsInstalled()
 {
 	return g_hooked;
 }

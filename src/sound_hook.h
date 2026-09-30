@@ -4,3 +4,6 @@
 bool SoundHook_Install();
 void SoundHook_Uninstall();
 void SoundHook_SetMuted(bool muted);
+bool SoundHook_IsInstalled();
+bool SoundHook_IsMuted();
+int SoundHook_GetSiteCount();

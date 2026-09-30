@@ -155,3 +155,23 @@ void SoundHook_Uninstall()
 	SoundHook_SetMuted(false);
 	s_SiteCount = 0;
 }
+
+bool SoundHook_IsInstalled()
+{
+	return s_SiteCount > 0;
+}
+
+bool SoundHook_IsMuted()
+{
+	for (int i = 0; i < s_SiteCount; i++)
+	{
+		if (s_Sites[i].patched)
+			return true;
+	}
+	return false;
+}
+
+int SoundHook_GetSiteCount()
+{
+	return s_SiteCount;
+}

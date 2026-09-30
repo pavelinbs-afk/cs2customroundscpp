@@ -21,10 +21,10 @@ public:
 
 	const char* GetAuthor() override		{ return "pRfect"; }
 	const char* GetName() override			{ return "Custom Rounds MM"; }
-	const char* GetDescription() override	{ return "One bullet / no sound / WASD invert custom round mechanics"; }
+	const char* GetDescription() override	{ return "One bullet / no sound / WASD invert / grenade shot custom rounds"; }
 	const char* GetURL() override			{ return ""; }
 	const char* GetLicense() override		{ return "GPL"; }
-	const char* GetVersion() override		{ return "1.1.6"; }
+	const char* GetVersion() override		{ return "1.2.6"; }
 	const char* GetDate() override			{ return __DATE__; }
 	const char* GetLogTag() override		{ return "CR"; }
 

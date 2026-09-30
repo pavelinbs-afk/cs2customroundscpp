@@ -3,3 +3,4 @@
 bool InvertHook_Install();
 void InvertHook_Uninstall();
 void InvertHook_ResetPlayerState();
+bool InvertHook_IsInstalled();

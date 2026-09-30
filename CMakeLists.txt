@@ -71,6 +71,48 @@ endif()
 
 set(MMS_CORE "${MMS_PATH}/core")
 
+# Bake git metadata into the binary for `cr_status`.
+set(CR_GIT_COMMIT "unknown")
+set(CR_GIT_BRANCH "unknown")
+set(CR_GIT_COMMIT_DATE "unknown")
+set(CR_GIT_COMMIT_SUBJECT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CR_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CR_GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" log -1 --format=%ci
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CR_GIT_COMMIT_DATE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" log -1 --format=%s
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CR_GIT_COMMIT_SUBJECT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
+string(TIMESTAMP CR_BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S")
+foreach(_cr_git_var IN ITEMS CR_GIT_COMMIT CR_GIT_BRANCH CR_GIT_COMMIT_DATE CR_GIT_COMMIT_SUBJECT CR_BUILD_TIMESTAMP)
+  string(REPLACE "\\" "\\\\" ${_cr_git_var} "${${_cr_git_var}}")
+  string(REPLACE "\"" "\\\"" ${_cr_git_var} "${${_cr_git_var}}")
+endforeach()
+
 add_library(customrounds_flags INTERFACE)
 
 target_compile_definitions(customrounds_flags INTERFACE
@@ -85,6 +127,11 @@ target_compile_definitions(customrounds_flags INTERFACE
   _vsnprintf=vsnprintf
   HAVE_STDINT_H
   GNUC
+  CR_GIT_COMMIT="${CR_GIT_COMMIT}"
+  CR_GIT_BRANCH="${CR_GIT_BRANCH}"
+  CR_GIT_COMMIT_DATE="${CR_GIT_COMMIT_DATE}"
+  CR_GIT_COMMIT_SUBJECT="${CR_GIT_COMMIT_SUBJECT}"
+  CR_BUILD_TIMESTAMP="${CR_BUILD_TIMESTAMP}"
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -208,6 +255,7 @@ add_custom_target(customrounds_protoc DEPENDS ${CR_PROTO_SRCS} ${CR_PROTO_HDRS})
 
 set(CR_PLUGIN_SRCS
   src/customrounds.cpp
+  src/commands.cpp
   src/schema.cpp
   src/vtable_finder.cpp
   src/players.cpp
@@ -215,6 +263,8 @@ set(CR_PLUGIN_SRCS
   src/rounds.cpp
   src/sound_hook.cpp
   src/invert_hook.cpp
+  src/entity_utils.cpp
+  src/grenade_shot_hook.cpp
 )
 
 set(CR_SDK_SRCS

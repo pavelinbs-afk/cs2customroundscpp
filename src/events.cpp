@@ -3,6 +3,7 @@
 #include <igameevents.h>
 
 #include "customrounds.h"
+#include "entity_utils.h"
 #include "rounds.h"
 
 static bool s_bRegistered = false;
@@ -38,7 +39,10 @@ public:
 		{
 			int iSlot = EventSlot(event, "userid");
 			if (iSlot >= 0)
-				Rounds_OnWeaponFire(iSlot);
+			{
+				const char* weapon = event->GetString("weapon");
+				Rounds_OnWeaponFireEvent(iSlot, weapon);
+			}
 			return;
 		}
 
@@ -94,5 +98,11 @@ void Events_OnStartupServer()
 {
 	s_bRegistered = false;
 	s_iRetryThrottle = 0;
+	EntityUtils_RetryGrenadeFactories();
 	Rounds_OnStartupServer();
+}
+
+bool Events_AreRegistered()
+{
+	return s_bRegistered;
 }

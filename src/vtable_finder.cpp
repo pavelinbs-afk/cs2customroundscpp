@@ -197,7 +197,7 @@ static bool ParseHexNibble(char c, uint8_t& out)
 
 void* FindFunctionSignature(const char* moduleSuffix, const char* sectionName, const char* idaSig)
 {
-	if (!moduleSuffix || !sectionName || !idaSig || !*idaSig)
+	if (!moduleSuffix || !idaSig || !*idaSig)
 		return nullptr;
 
 	std::vector<uint8_t> pattern;
@@ -211,11 +211,13 @@ void* FindFunctionSignature(const char* moduleSuffix, const char* sectionName, c
 		if (!*p)
 			break;
 
+		// IDA: '?' and '??' both mean one wildcard byte.
 		if (*p == '?')
 		{
 			pattern.push_back(0);
 			mask.push_back(0);
-			while (*p == '?')
+			p++;
+			if (*p == '?')
 				p++;
 			continue;
 		}
@@ -239,25 +241,56 @@ void* FindFunctionSignature(const char* moduleSuffix, const char* sectionName, c
 	if (!ReadSections(moduleSuffix, mod))
 		return nullptr;
 
-	const SectionRange* sec = mod.Get(sectionName);
-	if (!sec)
-		return nullptr;
-
-	for (size_t i = 0; i + pattern.size() <= sec->size; i++)
-	{
-		bool ok = true;
-		for (size_t j = 0; j < pattern.size(); j++)
+	auto trySection = [&](const SectionRange* sec) -> void* {
+		if (!sec || !sec->base || sec->size < pattern.size())
+			return nullptr;
+		for (size_t i = 0; i + pattern.size() <= sec->size; i++)
 		{
-			if (mask[j] && sec->base[i + j] != pattern[j])
+			bool ok = true;
+			for (size_t j = 0; j < pattern.size(); j++)
 			{
-				ok = false;
-				break;
+				if (mask[j] && sec->base[i + j] != pattern[j])
+				{
+					ok = false;
+					break;
+				}
 			}
+			if (ok)
+				return sec->base + i;
 		}
-		if (ok)
-			return sec->base + i;
+		return nullptr;
+	};
+
+	// Prefer named section first (usually ".text").
+	if (sectionName && *sectionName)
+	{
+		if (void* hit = trySection(mod.Get(sectionName)))
+			return hit;
 	}
 
+	// Fallback: any allocated section that looks like code (.text*).
+	for (const auto& sec : mod.sections)
+	{
+		if (sectionName && sec.name == sectionName)
+			continue;
+		if (sec.name.find(".text") == std::string::npos)
+			continue;
+		if (void* hit = trySection(&sec))
+			return hit;
+	}
+
+	return nullptr;
+}
+
+void* FindFunctionSignatureAny(const char* moduleSuffix, const char* sectionName, const char* const* idaSigs)
+{
+	if (!idaSigs)
+		return nullptr;
+	for (int i = 0; idaSigs[i]; ++i)
+	{
+		if (void* hit = FindFunctionSignature(moduleSuffix, sectionName, idaSigs[i]))
+			return hit;
+	}
 	return nullptr;
 }
 
@@ -270,6 +303,11 @@ void* FindVirtualTable(const char*, const char* className)
 }
 
 void* FindFunctionSignature(const char*, const char*, const char*)
+{
+	return nullptr;
+}
+
+void* FindFunctionSignatureAny(const char*, const char*, const char* const*)
 {
 	return nullptr;
 }

@@ -114,6 +114,6 @@ CON_COMMAND_F(cr_status, "CustomRounds status: version, hooks, mode, git build i
 		SoundHook_IsMuted() ? 1 : 0,
 		InvertHook_IsInstalled() ? "OK" : "FAIL",
 		GrenadeShotHook_IsInstalled() ? "OK" : "FAIL");
-	Msg("  commands    : customrounds_mm <0|1|2|3|4>, cr_status\n");
+	Msg("  commands    : customrounds_mm <0|1|2|3|4>, customrounds_tp <slot> x y z yaw, customrounds_tp_ready, cr_status\n");
 	Msg("================================================\n");
 }

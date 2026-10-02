@@ -253,6 +253,75 @@ void Entity_Teleport(CEntityInstance* pEnt, const CRVec3* pos, const CRQAngle* a
 	fn(pEnt, pos, ang, vel);
 }
 
+static void* GetSceneNode(CEntityInstance* pEnt)
+{
+	if (!pEnt)
+		return nullptr;
+
+	// Preferred: CBodyComponent → m_pSceneNode
+	void* pBody = Schema_Get<void*>(pEnt, "CBaseEntity", "m_CBodyComponent", nullptr);
+	if (pBody)
+	{
+		void* pNode = Schema_Get<void*>(pBody, "CBodyComponent", "m_pSceneNode", nullptr);
+		if (pNode)
+			return pNode;
+	}
+
+	// Fallback used by some builds
+	return Schema_Get<void*>(pEnt, "CBaseEntity", "m_pGameSceneNode", nullptr);
+}
+
+bool Entity_SetAbsOriginQuiet(CEntityInstance* pEnt, const CRVec3& pos)
+{
+	void* pNode = GetSceneNode(pEnt);
+	if (!pNode)
+		return false;
+
+	// No Schema_NetworkStateChanged / Teleport — those trigger WriteEnterPVS on CS2.
+	bool ok = Schema_Set<CRVec3>(pNode, "CGameSceneNode", "m_vecAbsOrigin", pos);
+	// Local origin too (root node) so physics/server agree.
+	Schema_Set<CRVec3>(pNode, "CGameSceneNode", "m_vecOrigin", pos);
+	return ok;
+}
+
+bool Entity_SetPawnYawQuiet(CEntityInstance* pPawn, float yaw)
+{
+	if (!pPawn)
+		return false;
+
+	void* pNode = GetSceneNode(pPawn);
+	if (pNode)
+	{
+		CRQAngle rot = Schema_Get<CRQAngle>(pNode, "CGameSceneNode", "m_angRotation");
+		rot.y = yaw;
+		Schema_Set<CRQAngle>(pNode, "CGameSceneNode", "m_angRotation", rot);
+	}
+
+	int32_t off = Schema_GetOffset("CCSPlayerPawn", "m_angEyeAngles");
+	if (off < 0)
+		off = Schema_GetOffset("CCSPlayerPawnBase", "m_angEyeAngles");
+	if (off >= 0)
+	{
+		auto* eye = reinterpret_cast<CRQAngle*>(reinterpret_cast<uintptr_t>(pPawn) + off);
+		eye->x = 0.f;
+		eye->y = yaw;
+		eye->z = 0.f;
+	}
+
+	return true;
+}
+
+bool Entity_ZeroAbsVelocityQuiet(CEntityInstance* pEnt)
+{
+	if (!pEnt)
+		return false;
+
+	CRVec3 zero{ 0.f, 0.f, 0.f };
+	if (Schema_Set<CRVec3>(pEnt, "CBaseEntity", "m_vecAbsVelocity", zero))
+		return true;
+	return Schema_Set<CRVec3>(pEnt, "CBaseEntity", "m_vecBaseVelocity", zero);
+}
+
 CEntityInstance* Entity_CreateGrenadeProjectile(
 	CRGrenadeType type,
 	const CRVec3& pos,

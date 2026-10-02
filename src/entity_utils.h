@@ -41,6 +41,11 @@ void Entity_DispatchSpawn(CEntityInstance* pEnt);
 void Entity_AcceptInput(CEntityInstance* pEnt, const char* input);
 void Entity_Teleport(CEntityInstance* pEnt, const CRVec3* pos, const CRQAngle* ang, const CRVec3* vel);
 
+/// Quiet move: write scene-node origin (no vtable Teleport — avoids WriteEnterPVS).
+bool Entity_SetAbsOriginQuiet(CEntityInstance* pEnt, const CRVec3& pos);
+bool Entity_SetPawnYawQuiet(CEntityInstance* pPawn, float yaw);
+bool Entity_ZeroAbsVelocityQuiet(CEntityInstance* pEnt);
+
 /// All types via native ::Create / EmitGrenade (fills weapon VData). No CreateEntityByName.
 CEntityInstance* Entity_CreateGrenadeProjectile(
 	CRGrenadeType type,

@@ -8,12 +8,28 @@
 #include "entity_utils.h"
 #include "grenade_shot_hook.h"
 #include "invert_hook.h"
+#include "players.h"
 #include "rounds.h"
 #include "sound_hook.h"
 #include "vtable_finder.h"
 
+#include <cstdlib>
+#include <tier1/convar.h>
+
 CustomRoundsPlugin g_CRPlugin;
 PLUGIN_EXPOSE(CustomRoundsPlugin, g_CRPlugin);
+
+// CSS checks these before calling customrounds_tp.
+static CConVar<bool> g_cvCustomRoundsTpReady(
+	"customrounds_tp_ready",
+	FCVAR_RELEASE | FCVAR_GAMEDLL,
+	"1 if customrounds_tp command exists",
+	true);
+static CConVar<bool> g_cvCustomRoundsTpEnable(
+	"customrounds_tp_enable",
+	FCVAR_RELEASE | FCVAR_GAMEDLL,
+	"1 to allow customrounds_tp. Set 0 to disable if WriteEnterPVS returns.",
+	true);
 
 IVEngineServer2* g_pEngine = nullptr;
 ISource2Server* g_pServer = nullptr;
@@ -98,6 +114,43 @@ static void Cmd_CustomRoundsMM(const CCommand& args)
 	Msg("[CR] customrounds_mm -> %d\n", mode);
 }
 
+/// RandomTeleport move. Prefer engine Teleport (client sync); angles kept (nullptr).
+/// Usage: customrounds_tp <slot> <x> <y> <z> <yaw>
+static void Cmd_CustomRoundsTp(const CCommand& args)
+{
+	if (!g_cvCustomRoundsTpEnable.Get())
+	{
+		Msg("[CR] customrounds_tp disabled (customrounds_tp_enable 0).\n");
+		return;
+	}
+
+	if (args.ArgC() < 5)
+	{
+		Msg("Usage: customrounds_tp <slot> <x> <y> <z> [yaw]\n");
+		return;
+	}
+
+	const int slot = atoi(args.Arg(1));
+	if (slot < 0 || slot >= CR_MAXPLAYERS)
+		return;
+
+	if (!IsPlayerAlive(slot))
+		return;
+
+	CEntityInstance* pPawn = GetPawnBySlot(slot);
+	if (!pPawn)
+		return;
+
+	CRVec3 pos{};
+	pos.x = static_cast<float>(atof(args.Arg(2)));
+	pos.y = static_cast<float>(atof(args.Arg(3)));
+	// Небольшой запас по Z — CSS уже поднимает, дублируем на всякий случай.
+	pos.z = static_cast<float>(atof(args.Arg(4))) + 2.f;
+
+	CRVec3 vel{ 0.f, 0.f, 0.f };
+	Entity_Teleport(pPawn, &pos, nullptr, &vel);
+}
+
 bool CustomRoundsPlugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
@@ -131,6 +184,9 @@ bool CustomRoundsPlugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t ma
 
 	Commands_Register();
 	new ConCommand("customrounds_mm", Cmd_CustomRoundsMM, "customrounds_mm <0|1|2|3|4>", FCVAR_GAMEDLL);
+	new ConCommand("customrounds_tp", Cmd_CustomRoundsTp, "customrounds_tp <slot> <x> <y> <z> <yaw>", FCVAR_GAMEDLL);
+	(void)g_cvCustomRoundsTpReady;
+	(void)g_cvCustomRoundsTpEnable;
 
 	const bool bEntityUtils = EntityUtils_Init();
 	const bool bSoundHook = SoundHook_Install();

@@ -114,13 +114,19 @@ static CEntityInstance* InfoEntity(void* pInfo, int32_t handleOff)
 	const CEntityHandle h = *reinterpret_cast<CEntityHandle*>(InfoBytes(pInfo) + handleOff);
 	if (!h.IsValid())
 		return nullptr;
-	return g_pGameEntitySystem->GetEntityInstance(h);
+	CEntityInstance* pEnt = g_pGameEntitySystem->GetEntityInstance(h);
+	if (!pEnt || !pEnt->GetClassname())
+		return nullptr;
+	return pEnt;
 }
 
 // Engine logs: damagetype N with GetDamageForce/Position == vZero.
 // Reconstruct from victim + attacker/inflictor origins (schema/dump layout).
 static void RepairDamageInfo(CEntityInstance* pVictim, void* pInfo)
 {
+	if (!pVictim->GetClassname())
+		return;
+
 	const DmgOffs& o = InfoOffs();
 	CRVec3 force = ReadVec(pInfo, o.force);
 	CRVec3 pos = ReadVec(pInfo, o.pos);

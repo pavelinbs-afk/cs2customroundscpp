@@ -258,17 +258,10 @@ static void* GetSceneNode(CEntityInstance* pEnt)
 	if (!pEnt)
 		return nullptr;
 
-	// Preferred: CBodyComponent → m_pSceneNode
 	void* pBody = Schema_Get<void*>(pEnt, "CBaseEntity", "m_CBodyComponent", nullptr);
-	if (pBody)
-	{
-		void* pNode = Schema_Get<void*>(pBody, "CBodyComponent", "m_pSceneNode", nullptr);
-		if (pNode)
-			return pNode;
-	}
-
-	// Fallback used by some builds
-	return Schema_Get<void*>(pEnt, "CBaseEntity", "m_pGameSceneNode", nullptr);
+	if (!pBody)
+		return nullptr;
+	return Schema_Get<void*>(pBody, "CBodyComponent", "m_pSceneNode", nullptr);
 }
 
 bool Entity_SetAbsOriginQuiet(CEntityInstance* pEnt, const CRVec3& pos)

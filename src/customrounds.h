@@ -24,7 +24,7 @@ public:
 	const char* GetDescription() override	{ return "One bullet / no sound / WASD invert / grenade shot custom rounds"; }
 	const char* GetURL() override			{ return ""; }
 	const char* GetLicense() override		{ return "GPL"; }
-	const char* GetVersion() override		{ return "1.3.6"; }
+	const char* GetVersion() override		{ return "1.3.7"; }
 	const char* GetDate() override			{ return __DATE__; }
 	const char* GetLogTag() override		{ return "CR"; }
 

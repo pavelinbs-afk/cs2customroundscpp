@@ -191,20 +191,17 @@ bool CustomRoundsPlugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t ma
 	const bool bEntityUtils = EntityUtils_Init();
 	const bool bSoundHook = SoundHook_Install();
 	const bool bInvertHook = InvertHook_Install();
-	const bool bGrenadeShotHook = GrenadeShotHook_Install();
 
 	CR_Log("loaded %s v%s (%s)", GetName(), GetVersion(), GetDate());
-	CR_Log("modes: 0=off 1=onebullet 2=nosound 3=invert 4=grenadeshot | entity=%s sound=%s invert=%s grenade_dmg=%s",
+	CR_Log("modes: 0=off 1=onebullet 2=nosound 3=invert 4=grenadeshot | entity=%s sound=%s invert=%s grenade_dmg=on-demand",
 		bEntityUtils ? "ok" : "FAILED",
 		bSoundHook ? "ok" : "FAILED",
-		bInvertHook ? "ok" : "FAILED",
-		bGrenadeShotHook ? "ok" : "FAILED");
-	META_CONPRINTF("[%s] Loaded %s v%s (%s) — customrounds_mm 0|1|2|3|4 entity=%s sound=%s invert=%s grenade=%s\n",
+		bInvertHook ? "ok" : "FAILED");
+	META_CONPRINTF("[%s] Loaded %s v%s (%s) — customrounds_mm 0|1|2|3|4 entity=%s sound=%s invert=%s grenade=on-demand\n",
 		GetLogTag(), GetName(), GetVersion(), GetDate(),
 		bEntityUtils ? "ok" : "FAIL",
 		bSoundHook ? "ok" : "FAIL",
-		bInvertHook ? "ok" : "FAIL",
-		bGrenadeShotHook ? "ok" : "FAIL");
+		bInvertHook ? "ok" : "FAIL");
 
 	return true;
 }

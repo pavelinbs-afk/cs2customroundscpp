@@ -9,6 +9,7 @@
 
 #include "customrounds.h"
 #include "entity_utils.h"
+#include "grenade_shot_hook.h"
 #include "invert_hook.h"
 #include "players.h"
 #include "schema.h"
@@ -52,6 +53,10 @@ void Rounds_SetMode(CRRoundMode mode)
 		InvertHook_ResetPlayerState();
 	if (prev == CRRoundMode::GrenadeShot || mode == CRRoundMode::GrenadeShot)
 		ResetGrenadeShotPlayerState();
+	if (mode == CRRoundMode::GrenadeShot)
+		GrenadeShotHook_Install();
+	else if (prev == CRRoundMode::GrenadeShot)
+		GrenadeShotHook_Uninstall();
 	CR_Log("round mode -> %d", static_cast<int>(mode));
 }
 
@@ -67,6 +72,7 @@ void Rounds_OnStartupServer()
 	ResetGrenadeShotPlayerState();
 	SoundHook_SetMuted(false);
 	InvertHook_ResetPlayerState();
+	GrenadeShotHook_Uninstall();
 }
 
 static bool IsExcludedWeapon(const char* designerName)

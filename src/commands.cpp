@@ -70,12 +70,35 @@ CON_COMMAND_F(cr_status, "CustomRounds status: version, hooks, mode, git build i
 	char nowBuf[64];
 	FormatLocalNow(nowBuf, sizeof(nowBuf));
 
-	const char* map = "?";
-	if (CGlobalVars* gv = GetGlobals())
+	char mapBuf[128] = "?";
+	const char* map = mapBuf;
 	{
-		const char* m = STRING(gv->mapname);
-		if (m && m[0])
-			map = m;
+		const char* raw = nullptr;
+		if (g_pNetServerService)
+		{
+			if (CNetworkGameServerBase* srv = g_pNetServerService->GetIGameServer())
+				raw = srv->GetMapName();
+		}
+		if ((!raw || !raw[0]) && GetGlobals())
+			raw = GetGlobals()->mapname.ToCStr();
+
+		if (raw && raw[0])
+		{
+			// workshop/de_mirage.ugc123 → de_mirage; maps/de_mirage.bsp → de_mirage
+			const char* base = raw;
+			for (const char* p = raw; *p; ++p)
+			{
+				if (*p == '/' || *p == '\\')
+					base = p + 1;
+			}
+			V_strncpy(mapBuf, base, sizeof(mapBuf));
+			if (const char* ugc = V_stristr(mapBuf, ".ugc"))
+				mapBuf[ugc - mapBuf] = '\0';
+			if (const char* bsp = V_stristr(mapBuf, ".bsp"))
+				mapBuf[bsp - mapBuf] = '\0';
+			if (!mapBuf[0])
+				V_strncpy(mapBuf, "?", sizeof(mapBuf));
+		}
 	}
 
 	const CRRoundMode mode = Rounds_GetMode();
